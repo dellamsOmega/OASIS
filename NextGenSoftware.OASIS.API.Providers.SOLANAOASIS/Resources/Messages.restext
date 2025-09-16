@@ -1,0 +1,14 @@
+SolanaNftTitleCannotBeEmpty=Title cannot be empty.
+SolanaNftTitleCannotBeLonger=Title cannot be longer than '{0} bytes.
+
+SolanaNftSymbolCannotBeEmpty=Symbol cannot be empty.
+SolanaNftSymbolCannotBeLonger=Symbol cannot be longer than '{0} bytes.
+
+JsonUrlCannotBeEmpty=JSONUrl cannot be empty.
+JsonUrlMustBeValid=JSONUrl must be a valid URI
+JsonUrlCannotBeLonger=JSONUrl cannot be longer than '{0}' bytes
+
+SolanaAccountAddressRequired=Account address is required.
+SolanaAccountAddressInvalidFormat=Invalid account address format.
+NftAmountMustBeGreaterThanZero=Amount must be greater than zero.
+NftAmountMustEqualOne=NFT transfers must use Amount = 1.

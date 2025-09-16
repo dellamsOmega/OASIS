@@ -1,10 +1,13 @@
-﻿namespace NextGenSoftware.OASIS.API.Providers.SOLANAOASIS.Infrastructure.Services.Solana;
+﻿using FluentValidation.Results;
+
+namespace NextGenSoftware.OASIS.API.Providers.SOLANAOASIS.Infrastructure.Services.Solana;
 
 public sealed class SolanaService(Account oasisAccount, IRpcClient rpcClient) : ISolanaService
 {
     private const uint SellerFeeBasisPoints = 500;
     private const byte CreatorShare = 100;
     private const string Solana = "Solana";
+    private const int TimeoutSeconds = 30;
 
     private readonly List<Creator> _creators =
     [
@@ -16,18 +19,25 @@ public sealed class SolanaService(Account oasisAccount, IRpcClient rpcClient) : 
     {
         try
         {
+            ValidationResult validation =
+                await MintNftTransactionRequestForProviderValidation.Instance.ValidateAsync(mintNftRequest);
+            if (!validation.IsValid)
+                return HandleError<MintNftResult>(
+                    $"Validation error: {string.Join("; ", validation.Errors.Select(e => e.ErrorMessage))}");
+
+
             MetadataClient metadataClient = new(rpcClient);
             Account mintAccount = new();
-
+            Console.WriteLine("MintAccount: " + mintAccount.PublicKey.Key);
+            
             Metadata tokenMetadata = new()
             {
                 name = mintNftRequest.Title,
                 symbol = mintNftRequest.Symbol,
-                sellerFeeBasisPoints = SellerFeeBasisPoints,
                 uri = mintNftRequest.JSONUrl,
+                sellerFeeBasisPoints = SellerFeeBasisPoints,
                 creators = _creators
             };
-
             RequestResult<string> createNftResult = await metadataClient.CreateNFT(
                 ownerAccount: oasisAccount,
                 mintAccount: mintAccount,
@@ -46,22 +56,48 @@ public sealed class SolanaService(Account oasisAccount, IRpcClient rpcClient) : 
                     log.Contains("insufficient lamports", StringComparison.OrdinalIgnoreCase)) == true;
 
                 if (isBalanceError || isLamportError)
-                {
                     return HandleError<MintNftResult>(
                         $"{createNftResult.Reason}.\n Insufficient SOL to cover the transaction fee or rent.");
-                }
 
                 return HandleError<MintNftResult>(createNftResult.Reason);
             }
 
-            return SuccessResult(
-                new(mintAccount.PublicKey.Key,
-                    Solana,
-                    createNftResult.Result));
+            string signature = createNftResult.Result;
+
+            bool confirmed = await WaitForFinalization(signature);
+            if (!confirmed)
+                return HandleError<MintNftResult>("Transaction was not finalized in the expected time.");
+
+            return SuccessResult(new MintNftResult(
+                mintAccount.PublicKey.Key,
+                Solana,
+                signature));
         }
         catch (Exception ex)
         {
             return HandleError<MintNftResult>(ex.Message);
+        }
+
+        async Task<bool> WaitForFinalization(string signature)
+        {
+            DateTime start = DateTime.UtcNow;
+
+            while ((DateTime.UtcNow - start).TotalSeconds < TimeoutSeconds)
+            {
+                RequestResult<ResponseValue<List<SignatureStatusInfo>>> result =
+                    await rpcClient.GetSignatureStatusesAsync([signature]);
+                SignatureStatusInfo info = result?.Result?.Value?.FirstOrDefault();
+
+                if (info?.ConfirmationStatus == "finalized")
+                    return true;
+
+                if (info?.Error != null)
+                    throw new Exception($"Transaction failed with error: {info.Error}");
+
+                await Task.Delay(500);
+            }
+
+            return false;
         }
     }
 
@@ -118,6 +154,16 @@ public sealed class SolanaService(Account oasisAccount, IRpcClient rpcClient) : 
         OASISResult<GetNftResult> response = new();
         try
         {
+            ValidationResult validation =
+                await SolanaAccountAddressValidation.Instance.ValidateAsync(address);
+            if (!validation.IsValid)
+            {
+                response.IsError = true;
+                response.Message = $"Validation error: {string.Join("; ", validation.Errors.Select(e => e.ErrorMessage))}";
+                OASISErrorHandling.HandleError(ref response, response.Message);
+                return response;
+            }
+
             PublicKey nftAccount = new(address);
             MetadataAccount metadataAccount = await MetadataAccount.GetAccount(rpcClient, nftAccount);
 
@@ -153,6 +199,13 @@ public sealed class SolanaService(Account oasisAccount, IRpcClient rpcClient) : 
 
         try
         {
+            ValidationResult validation =
+                await SendNftTransactionRequestValidation.Instance.ValidateAsync(mintNftRequest);
+            if (!validation.IsValid)
+                return HandleError<SendTransactionResult>(
+                    $"Validation error: {string.Join("; ", validation.Errors.Select(e => e.ErrorMessage))}");
+
+
             RequestResult<ResponseValue<AccountInfo>> accountInfoResult = await rpcClient.GetAccountInfoAsync(
                 AssociatedTokenAccountProgram.DeriveAssociatedTokenAccount(
                     new PublicKey(mintNftRequest.ToWalletAddress),

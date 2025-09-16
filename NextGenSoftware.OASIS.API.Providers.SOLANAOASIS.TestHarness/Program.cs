@@ -39,7 +39,7 @@ internal static class Program
 
     private static async Task Run_LoadNftAsync()
     {
-        const string address = "46SPSK3KbLUVmwPbqbx1PiC6hpqSpBqe5GUeUzsfmZVN";
+        const string address = "FQdX5hCnh2iqMUkcaPdzBrUonqx7VegiVScwykrV2tid";
 
         SolanaOASIS solanaOasis = new(TestData.HostUri, TestData.PrivateKey.Key, TestData.PublicKey.Key);
         WriteInfo("Activating Solana provider...");
@@ -55,6 +55,11 @@ internal static class Program
         }
 
         IOASISNFT result = response.Result;
+        if (result == null)
+        {
+            WriteInfo("NFT not yet available, retrying");
+            return;
+        }
 
         WriteColored("Title", result.Title, ConsoleColor.Green);
         WriteColored("Symbol", result.Symbol, ConsoleColor.Cyan);
@@ -121,9 +126,9 @@ internal static class Program
 
         IMintNFTTransactionRequestForProvider mintNftRequest = new MintNFTTransactionRequestForProvider()
         {
-            JSONUrl = "https://example.com/metadata.json-#1",
-            Title = "Test data for LoadNft #1",
-            Symbol = "LOADNFT!#1",
+            JSONUrl = "https://example.com/metadata.json-#3",
+            Title = "TestAfterBugFix #3",
+            Symbol = "tabf#3",
         };
 
         WriteInfo($"Minting NFT: {mintNftRequest.Title}...");
@@ -162,11 +167,12 @@ internal static class Program
         await solanaOasis.ActivateProviderAsync();
 
 
-        // Before using, update with new data!
+        // Before using, update with new data!!!!!
         INFTWalletTransactionRequest request = new NFTWalletTransactionRequest()
         {
             FromWalletAddress = TestData.PublicKey.Key,
-            TokenAddress = "46SPSK3KbLUVmwPbqbx1PiC6hpqSpBqe5GUeUzsfmZVN",
+            // Before using, update with new data!!!!!
+            TokenAddress = "FQdX5hCnh2iqMUkcaPdzBrUonqx7VegiVScwykrV2tid",
             Amount = 1,
             ToWalletAddress = "2Gtzh4ywuvxNWmtLkS8zqJ3CJpbguquuqRWJCdeZF1Jm"
         };
@@ -188,7 +194,6 @@ internal static class Program
     private static async Task Main()
     {
         WriteInfo("=== Starting SolanaOASIS Test Harness ===");
-
 
         //ok// await Run_MintNFTAsync();
         //ok// await Run_LoadNftAsync();
